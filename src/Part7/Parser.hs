@@ -14,43 +14,43 @@ newtype Parser a = Parser {runParser :: String -> Either String (String, a)}
 
 instance Functor Parser where
   fmap :: forall a b . (a -> b) -> Parser a -> Parser b
-  fmap f (Parser r1) = Parser r2
+  fmap f1 (Parser f2) = Parser f
     where 
-      r2 :: String -> Either String (String, b)
-      r2 s = fmap (\(s, x) -> (s, f x)) (r1 s)
+      f :: String -> Either String (String, b)
+      f s = fmap (\(s, x) -> (s, f1 x)) (f2 s)
 
 instance Applicative Parser where
   pure :: a -> Parser a
   pure x = Parser (\s -> Right (s, x))
   (<*>) :: forall a b. Parser (a -> b) -> Parser a -> Parser b
-  (<*>) (Parser xy) (Parser x) = Parser y
+  (<*>) (Parser f1) (Parser f2) = Parser f
     where 
-      y :: String -> Either String (String, b)
-      y s = case (xy s) of
+      f :: String -> Either String (String, b)
+      f s = case (f1 s) of
         Left e -> Left e
-        Right (s1, v1) -> case (x s1) of
+        Right (s1, v1) -> case (f2 s1) of
           Left e -> Left e
           Right (s2, v2) -> Right (s2, v1 v2)
 
 instance Alternative Parser where
   (<|>) :: forall a. Parser a -> Parser a -> Parser a
-  (<|>) (Parser x) (Parser y) = Parser z
+  (<|>) (Parser f1) (Parser f2) = Parser f
     where 
-      z :: String -> Either String (String, a)
-      z s = case (x s) of
-        Left _ -> y s
+      f :: String -> Either String (String, a)
+      f s = case (f1 s) of
+        Left _ -> f2 s
         a@(Right _) -> a
   empty :: Parser a
   empty = Parser (\s -> Left "no found sorry bruh")
 
 instance Monad Parser where
   (>>=) :: forall a b. Parser a -> (a -> Parser b) -> Parser b
-  (>>=) (Parser x) f = Parser y
+  (>>=) (Parser f1) f2 = Parser f
     where 
-      y :: String -> Either String (String, b)
-      y s = case x s of 
+      f :: String -> Either String (String, b)
+      f s = case f1 s of 
         Left e -> Left e
-        Right (s1, a) -> let Parser ax = (f a) in ax s1
+        Right (s1, a) -> let Parser f3 = (f2 a) in f3 s1
 
 instance MonadFail Parser where
   fail :: String -> Parser a
@@ -114,3 +114,9 @@ stringPredicateP pr = many (charPredicateP pr)
 
 stringPredicateNonEmptyP :: (Char -> Bool) -> Parser [Char]
 stringPredicateNonEmptyP pr = some (charPredicateP pr)
+
+token :: Parser a -> Parser a
+token p = skipWs *> p
+
+symbol :: Char -> Parser Char
+symbol c = token (charP c)

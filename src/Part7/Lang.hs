@@ -51,15 +51,15 @@ parseJSON = (
 
 
 parseNull :: Parser JSON
-parseNull = skipWs *> (stringP "null") *> pure JSONNull
+parseNull = token (stringP "null") *> pure JSONNull
 
 parseBool :: Parser JSON
-parseBool = JSONBool <$> (skipWs *> 
-    ((stringP "true"  *> pure True) <|> 
-     (stringP "false" *> pure False)))
+parseBool = JSONBool <$> token
+    ((stringP "true"  *> pure True) <|>
+     (stringP "false" *> pure False))
 
 parseNumber :: Parser JSON
-parseNumber = skipWs *> (makeNumber <$> signedDigit <*> (optional "" frac) <*> (optional "" exp))
+parseNumber = token (makeNumber <$> signedDigit <*> (optional "" frac) <*> (optional "" exp))
   where
     -- integer
     digits = stringPredicateNonEmptyP isDigit
@@ -81,11 +81,11 @@ parseNumber = skipWs *> (makeNumber <$> signedDigit <*> (optional "" frac) <*> (
     makeNumber intpart mfrac mexp = (JSONFloat . read) (intpart ++ mfrac ++ mexp)
   
 parseString :: Parser JSON
-parseString = skipWs *> (JSONString <$> stringLiteral)
+parseString = JSONString <$> token stringLiteral
 
 parseArrayOrObject :: Char -> Char -> Char -> ([a] -> JSON) -> (Parser a) -> Parser JSON
 parseArrayOrObject lbr sep rbr ctor elem =
-  skipWs *> charP lbr *> (ctor <$> sepBy (skipWs *> elem) (skipWs *> charP sep)) <* skipWs <* charP rbr
+  symbol lbr *> (ctor <$> sepBy elem (symbol sep)) <* symbol rbr
 
 parseArray :: Parser JSON
 parseArray = parseArrayOrObject '[' ',' ']' JSONArray parseJSON
@@ -94,11 +94,7 @@ parseObject :: Parser JSON
 parseObject = parseArrayOrObject '{' ',' '}' JSONObject parseKV
 
 parseKV :: Parser (String, JSON)
-parseKV =
-  (,) <$> 
-    (skipWs *> stringLiteral)
-    <* skipWs <* (charP ':')
-    <*> parseJSON
+parseKV = (,) <$> token stringLiteral <* symbol ':' <*> parseJSON
 
 stringLiteral :: Parser String
 stringLiteral = charP '"' *> many jsonChar <* charP '"'

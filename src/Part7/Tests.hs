@@ -10,63 +10,60 @@ import Data.List (intersperse, intercalate)
 import qualified Part7.Parser as JSON
 
 -- Parser tests
-run_parse :: String -> Parser a -> Either String (String, a)
-run_parse s (Parser f) = f s
-
 unit_eof = do
-        isLeft (run_parse "42" eofP) @?= True
-        run_parse "" eofP @?= Right("", ())
+        isLeft (runParser eofP "42") @?= True
+        runParser eofP "" @?= Right("", ())
 
 unit_charP = do
-        run_parse "1234" (charP '1') @?= Right ("234", '1')
-        isLeft (run_parse "1234" (charP '2')) @?= True
-        isLeft (run_parse "1234" (charP '3')) @?= True
-        isLeft (run_parse "1234" (charP '4')) @?= True
-        isLeft (run_parse "1234" (charP 'x')) @?= True
+        runParser (charP '1') "1234" @?= Right ("234", '1')
+        isLeft (runParser (charP '2') "1234") @?= True
+        isLeft (runParser (charP '3') "1234") @?= True
+        isLeft (runParser (charP '4') "1234") @?= True
+        isLeft (runParser (charP 'x') "1234") @?= True
 
 
 unit_any_char_p = do
-        run_parse "1234" anyCharP @?= Right ("234", '1')
-        isLeft (run_parse "" anyCharP) @?= True
+        runParser anyCharP "1234" @?= Right ("234", '1')
+        isLeft (runParser anyCharP "") @?= True
     
 prop_any_char_p :: Char -> String -> Property
 prop_any_char_p symbol string = 
-    run_parse (symbol : string) anyCharP === Right(string, symbol)
+    runParser anyCharP (symbol : string) === Right(string, symbol)
 
 unit_string_p = do
-    run_parse "123456789" (stringP "1234") @?= Right ("56789", "1234")
-    run_parse "123456789" (stringP "") @?= Right ("123456789", "")
-    isLeft (run_parse "123456789" (stringP "12346789")) @?= True
-    isLeft (run_parse "123456789" (stringP "12345678910")) @?= True
+    runParser (stringP "1234") "123456789" @?= Right ("56789", "1234")
+    runParser (stringP "") "123456789" @?= Right ("123456789", "")
+    isLeft (runParser (stringP "12346789") "123456789") @?= True
+    isLeft (runParser (stringP "12345678910") "123456789") @?= True
 
 prop_string_p :: String -> String -> Property
 prop_string_p prefix suffix =
-    run_parse (prefix ++ suffix) (stringP prefix) === Right (suffix, prefix)
+    runParser (stringP prefix) (prefix ++ suffix) === Right (suffix, prefix)
 
 unit_sep_by :: IO ()
 unit_sep_by = do
-    run_parse "12, 12, 56" (sepBy (stringP "aboba") (stringP ", ")) @?= Right ("12, 12, 56", [])
-    run_parse "12, 12, 56" (sepBy (stringP "12") (stringP ", ")) @?= Right (", 56", ["12", "12"])
-    run_parse "12, 12, 56" (sepBy (stringP "12, ") (stringP "")) @?= Right ("56", ["12, ", "12, "])
-    run_parse "12, 12, 56" (sepBy (stringPredicateP isDigit) (stringP ", ")) @?= Right ("", ["12", "12", "56"])
+    runParser (sepBy (stringP "aboba") (stringP ", ")) "12, 12, 56" @?= Right ("12, 12, 56", [])
+    runParser (sepBy (stringP "12") (stringP ", ")) "12, 12, 56" @?= Right (", 56", ["12", "12"])
+    runParser (sepBy (stringP "12, ") (stringP "")) "12, 12, 56" @?= Right ("56", ["12, ", "12, "])
+    runParser (sepBy (stringPredicateP isDigit) (stringP ", ")) "12, 12, 56" @?= Right ("", ["12", "12", "56"])
 
 unit_sep_by1 :: IO ()
 unit_sep_by1 = do
-    isLeft (run_parse "12, 12, 56" (sepBy1 (stringP "aboba") (stringP ", "))) @?= True
-    run_parse "12, 12, 56" (sepBy1 (stringP "12") (stringP ", ")) @?= Right (", 56", ["12", "12"])
-    run_parse "12, 12, 56" (sepBy1 (stringP "12, ") (stringP "")) @?= Right ("56", ["12, ", "12, "])
-    run_parse "12, 12, 56" (sepBy1 (stringPredicateP isDigit) (stringP ", ")) @?= Right ("", ["12", "12", "56"])
+    isLeft (runParser (sepBy1 (stringP "aboba") (stringP ", ")) "12, 12, 56") @?= True
+    runParser (sepBy1 (stringP "12") (stringP ", ")) "12, 12, 56" @?= Right (", 56", ["12", "12"])
+    runParser (sepBy1 (stringP "12, ") (stringP "")) "12, 12, 56" @?= Right ("56", ["12, ", "12, "])
+    runParser (sepBy1 (stringPredicateP isDigit) (stringP ", ")) "12, 12, 56" @?= Right ("", ["12", "12", "56"])
 
 prop_optional prefix suffix =
-    run_parse (prefix ++ suffix) (stringP prefix) === Right (suffix, prefix)
+    runParser (stringP prefix) (prefix ++ suffix) === Right (suffix, prefix)
 
 -- Classes tests
 
 unit_functor :: IO ()
 unit_functor =
     do
-        run_parse string constantParser        @?= Right (string, c)
-        run_parse string fmappedConstantParser @?= Right (string, f c)
+        runParser constantParser string        @?= Right (string, c)
+        runParser fmappedConstantParser string @?= Right (string, f c)
     where
         string = "Garbage"
         (f, c)                   = ((* 42), 932)
@@ -80,13 +77,13 @@ unit_functor =
 
 prop_functor_id :: String -> Int -> Property
 prop_functor_id input c =
-    run_parse input (fmap id p) === run_parse input p
+    runParser (fmap id p) input === runParser p input
   where
     p = pure c :: Parser Int
 
 prop_functor_compose :: String -> Fun Int Int -> Fun Int Int -> Int -> Property
 prop_functor_compose input (Fn f) (Fn g) c =
-    run_parse input (fmap (f . g) p) === run_parse input ((fmap f . fmap g) p)
+    runParser (fmap (f . g) p) input === runParser ((fmap f . fmap g) p) input
   where
     p = pure c :: Parser Int
 
@@ -95,7 +92,7 @@ prop_functor_compose input (Fn f) (Fn g) c =
 unit_applicative :: IO ()
 unit_applicative =
     do
-        run_parse string (fParser <*> c1Parser <*> c2Parser) @?= Right (string, f c1 c2)
+        runParser (fParser <*> c1Parser <*> c2Parser) string @?= Right (string, f c1 c2)
     where
         string = "Garbage"
         (f, c1, c2)                   = ((*), 932, 24)
@@ -113,19 +110,19 @@ unit_applicative =
 
 prop_applicative_identity :: String -> Int -> Property
 prop_applicative_identity input x =
-    run_parse input (pure id <*> pure x) === run_parse input (pure x :: Parser Int)
+    runParser (pure id <*> pure x) input === runParser (pure x :: Parser Int) input
 
 prop_applicative_homomorphism :: String -> Fun Int Int -> Int -> Property
 prop_applicative_homomorphism input (Fn f) x =
-    run_parse input (pure f <*> pure x) === run_parse input (pure (f x) :: Parser Int)
+    runParser (pure f <*> pure x) input === runParser (pure (f x) :: Parser Int) input
 
 prop_applicative_binary :: String -> Fun (Int, Int) Int -> Int -> Int -> Property
 prop_applicative_binary input (Fn2 f) c1 c2 =
-    run_parse input (pure f <*> pure c1 <*> pure c2) === Right (input, f c1 c2)
+    runParser (pure f <*> pure c1 <*> pure c2) input === Right (input, f c1 c2)
 
 prop_applicative_interchange :: String -> Fun Int Int -> Int -> Property
 prop_applicative_interchange input (Fn f) y =
-    run_parse input (u <*> pure y) === run_parse input (pure ($ y) <*> u)
+    runParser (u <*> pure y) input === runParser (pure ($ y) <*> u) input
   where
     u = pure f :: Parser (Int -> Int)
 
@@ -135,37 +132,37 @@ prop_applicative_interchange input (Fn f) y =
 unit_alternative :: IO ()
 unit_alternative =
     do
-        isLeft (run_parse string empty) @?= True
-        run_parse string sParser @?= Right (string, 42)
-        run_parse string (sParser) @?= run_parse string (sParser <|> empty)
-        run_parse string (sParser) @?= run_parse string (empty <|> sParser)
+        isLeft (runParser empty string) @?= True
+        runParser sParser string @?= Right (string, 42)
+        runParser (sParser) string @?= runParser (sParser <|> empty) string
+        runParser (sParser) string @?= runParser (empty <|> sParser) string
     where
         string = "Garbage"
         (sParser) = (pure 42)
 
 prop_alternative_identity :: String -> Int -> Property
 prop_alternative_identity input c = 
-        isLeft (run_parse input empty) === True .&&.
-        run_parse input (p <|> empty) === run_parse input p .&&.
-        run_parse input (empty <|> p) === run_parse input p
+        isLeft (runParser empty input) === True .&&.
+        runParser (p <|> empty) input === runParser p input .&&.
+        runParser (empty <|> p) input === runParser p input
   where
     p = pure c :: Parser Int
 
 prop_alternative_choice :: String -> Int -> Int -> Property
 prop_alternative_choice input x y =
-    run_parse input (pure x <|> pure y) === Right (input, x)
+    runParser (pure x <|> pure y) input === Right (input, x)
 
 -- Monad
 
 unit_monad :: IO ()
 unit_monad =
     do
-        run_parse string (return c >>= f) @?= run_parse string (f c)
-        run_parse string (m >>= return)   @?= run_parse string m
-        run_parse string ((m >>= f) >>= g) @?= run_parse string (m >>= (\x -> f x >>= g))
-        run_parse string (m >>= f >>= g)   @?= Right (string, (c + 10) * 2)
-        run_parse string (pure "Boom") @?= Right (string, "Boom")
-        isLeft (run_parse string (m >> fail "Boom" >>= g))     @?= True
+        runParser (return c >>= f) string @?= runParser (f c) string
+        runParser (m >>= return) string   @?= runParser m string
+        runParser ((m >>= f) >>= g) string @?= runParser (m >>= (\x -> f x >>= g)) string
+        runParser (m >>= f >>= g) string   @?= Right (string, (c + 10) * 2)
+        runParser (pure "Boom") string @?= Right (string, "Boom")
+        isLeft (runParser (m >> fail "Boom" >>= g) string)     @?= True
     where
         string = "Garbage"
         c      = 42
@@ -184,19 +181,19 @@ unit_monad =
 
 prop_monad_left_id :: String -> Int -> Fun Int Int -> Property
 prop_monad_left_id input a (Fn f) =
-    run_parse input (pure a >>= k) === run_parse input (k a)
+    runParser (pure a >>= k) input === runParser (k a) input
   where
     k x = pure (f x) 
 
 prop_monad_right_id :: String -> Int -> Property
 prop_monad_right_id input a =
-    run_parse input (m >>= pure) === run_parse input m
+    runParser (m >>= pure) input === runParser m input
   where
     m = pure a 
 
 prop_monad_assoc :: String -> Int -> Fun Int Int -> Fun Int Int -> Property
 prop_monad_assoc input a (Fn f) (Fn g) =
-    run_parse input ((m >>= k1) >>= k2) === run_parse input (m >>= (\x -> k1 x >>= k2))
+    runParser ((m >>= k1) >>= k2) input === runParser (m >>= (\x -> k1 x >>= k2)) input
   where
     m    = pure a 
     k1 x = pure (f x) 
@@ -206,66 +203,65 @@ prop_monad_assoc input a (Fn f) (Fn g) =
 
 unit_json_null :: IO ()
 unit_json_null = do
-    run_parse "null" json_parse @?= Right ("", JSONNull)
-    isLeft (run_parse "nul" json_parse) @?= True
-    isLeft (run_parse "nulls" json_parse) @?= True
+    runParser json_parse "null" @?= Right ("", JSONNull)
+    isLeft (runParser json_parse "nul") @?= True
+    isLeft (runParser json_parse "nulls") @?= True
 
 unit_json_bool :: IO ()
 unit_json_bool = do
-    run_parse "true" json_parse @?= Right ("", JSONBool True)
-    run_parse "false" json_parse @?= Right ("", JSONBool False)
-    run_parse "  false  " json_parse @?= Right ("", JSONBool False)
-    isLeft (run_parse "tru" json_parse) @?= True
+    runParser json_parse "true" @?= Right ("", JSONBool True)
+    runParser json_parse "false" @?= Right ("", JSONBool False)
+    runParser json_parse "  false  " @?= Right ("", JSONBool False)
+    isLeft (runParser json_parse "tru") @?= True
 
 unit_json_number :: IO ()
 unit_json_number = do
-    run_parse "42" json_parse @?= Right ("", JSONInteger 42)
-    run_parse "-17" json_parse @?= Right ("", JSONInteger (-17))
-    run_parse "3.14" json_parse @?= Right ("", JSONFloat 3.14)
-    run_parse "1.5e3" json_parse @?= Right ("", JSONFloat 1500.0)
-    run_parse "2E-1" json_parse @?= Right ("", JSONFloat 0.2)
-    isLeft (run_parse "3.1.4" json_parse) @?= True
+    runParser json_parse "42" @?= Right ("", JSONInteger 42)
+    runParser json_parse "-17" @?= Right ("", JSONInteger (-17))
+    runParser json_parse "3.14" @?= Right ("", JSONFloat 3.14)
+    runParser json_parse "1.5e3" @?= Right ("", JSONFloat 1500.0)
+    runParser json_parse "2E-1" @?= Right ("", JSONFloat 0.2)
+    isLeft (runParser json_parse "3.1.4") @?= True
 
 unit_json_string :: IO ()
 unit_json_string = do
-    run_parse "\"hello\"" json_parse @?= Right ("", JSONString "hello")
-    run_parse "\"\"" json_parse @?= Right ("", JSONString "")
-    run_parse "\"a\\n\\t\\\\b\"" json_parse @?= Right ("", JSONString "a\n\t\\b")
-    isLeft (run_parse "\"unclosed" json_parse) @?= True
+    runParser json_parse "\"hello\"" @?= Right ("", JSONString "hello")
+    runParser json_parse "\"\"" @?= Right ("", JSONString "")
+    runParser json_parse "\"a\\n\\t\\\\b\"" @?= Right ("", JSONString "a\n\t\\b")
+    isLeft (runParser json_parse "\"unclosed") @?= True
 
 unit_json_array :: IO ()
 unit_json_array = do
-    run_parse "[]" json_parse @?= Right ("", JSONArray [])
-    run_parse "[1, 2, 3]" json_parse @?= Right ("", JSONArray [JSONInteger 1, JSONInteger 2, JSONInteger 3])
-    run_parse "[true, null, \"x\"]" json_parse @?= Right ("", JSONArray [JSONBool True, JSONNull, JSONString "x"])
-    run_parse "[[[]]]" json_parse @?= Right ("", JSONArray [JSONArray [JSONArray []]])
-    isLeft (run_parse "[1, 2" json_parse) @?= True
+    runParser json_parse "[]" @?= Right ("", JSONArray [])
+    runParser json_parse "[1, 2, 3]" @?= Right ("", JSONArray [JSONInteger 1, JSONInteger 2, JSONInteger 3])
+    runParser json_parse "[true, null, \"x\"]" @?= Right ("", JSONArray [JSONBool True, JSONNull, JSONString "x"])
+    runParser json_parse "[[[]]]" @?= Right ("", JSONArray [JSONArray [JSONArray []]])
+    isLeft (runParser json_parse "[1, 2") @?= True
 
 unit_json_object :: IO ()
 unit_json_object = do
-    run_parse "{}" json_parse @?= Right ("", JSONObject [])
-    run_parse "{\"a\": 1}" json_parse @?= Right ("", JSONObject [("a", JSONInteger 1)])
-    run_parse "{\"a\": 1, \"b\": false}" json_parse @?= Right ("", JSONObject [("a", JSONInteger 1), ("b", JSONBool False)])
-    run_parse "{\"nested\": {\"x\": [null]}}" json_parse @?= Right ("", JSONObject [("nested", JSONObject [("x", JSONArray [JSONNull])])])
-    isLeft (run_parse "{\"a\": 1, }" json_parse) @?= True
+    runParser json_parse "{}" @?= Right ("", JSONObject [])
+    runParser json_parse "{\"a\": 1}" @?= Right ("", JSONObject [("a", JSONInteger 1)])
+    runParser json_parse "{\"a\": 1, \"b\": false}" @?= Right ("", JSONObject [("a", JSONInteger 1), ("b", JSONBool False)])
+    runParser json_parse "{\"nested\": {\"x\": [null]}}" @?= Right ("", JSONObject [("nested", JSONObject [("x", JSONArray [JSONNull])])])
+    isLeft (runParser json_parse "{\"a\": 1, }") @?= True
 
 unit_json_nested :: IO ()
 unit_json_nested = do
-    run_parse "{\"menu\": {\"items\": [{\"id\": 1}, {\"id\": 2.5}], \"title\": \"hi\"}}"
-        json_parse
+    runParser json_parse "{\"menu\": {\"items\": [{\"id\": 1}, {\"id\": 2.5}], \"title\": \"hi\"}}"
         @?= Right ("", JSONObject [("menu", JSONObject
             [ 
                 ("items", JSONArray [ JSONObject [("id", JSONInteger 1)], JSONObject [("id", JSONFloat 2.5)] ]),
                 ("title", JSONString "hi") ])])
-    run_parse "  [ 1 , { \"k\" : [ true ] } ]  " json_parse
+    runParser json_parse "  [ 1 , { \"k\" : [ true ] } ]  "
         @?= Right ("", JSONArray [JSONInteger 1, JSONObject [("k", JSONArray [JSONBool True])]])
 
 unit_json_trailing_garbage :: IO ()
 unit_json_trailing_garbage = do
-    isLeft (run_parse "1 2" json_parse) @?= True
-    isLeft (run_parse "{} []" json_parse) @?= True
-    run_parse "  42  " json_parse @?= Right ("", JSONInteger 42)
-    run_parse "  42  \n\n\n\t\t\n" json_parse @?= Right ("", JSONInteger 42)
+    isLeft (runParser json_parse "1 2") @?= True
+    isLeft (runParser json_parse "{} []") @?= True
+    runParser json_parse "  42  " @?= Right ("", JSONInteger 42)
+    runParser json_parse "  42  \n\n\n\t\t\n" @?= Right ("", JSONInteger 42)
 
 -- json property based test
 
@@ -292,4 +288,4 @@ genSafeString = listOf (suchThat arbitrary (\c -> c >= ' ' && c /= '"' && c /= '
 
 prop_code_encode :: JSON -> Property
 prop_code_encode js =
-    run_parse (dump js) json_parse === Right ("", js)
+    runParser json_parse (dump js) === Right ("", js)
